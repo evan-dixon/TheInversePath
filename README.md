@@ -2,6 +2,9 @@
 
 A puzzle platformer where you navigate through a world of shifting contrasts and falling blocks.
 
+This was created for the Weekly Jam #2 on Itch.io
+[https://itch.io/jam/weekly-jam-2-new]
+
 ## Building from Source
 
 ### Prerequisites
