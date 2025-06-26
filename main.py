@@ -187,7 +187,7 @@ class Game:
         self.waiting_for_key = None
         
         # Volume settings (initialize before sound systems)
-        self.sfx_volume = 1.0
+        self.sfx_volume = 0.5
         self.music_volume = 0.5
         self.sfx_muted = False
         self.music_muted = False
