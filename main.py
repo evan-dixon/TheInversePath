@@ -556,12 +556,36 @@ class Game:
                 
                 # Check if block would hit bottom of screen
                 if grid_y >= GRID_SIZE - 1:
-                    # Reset block to top with random x position
-                    block.x = random.randint(0, GRID_SIZE-1)
-                    block.y = random.uniform(0, 3)
+                    # Check if the block can fall through to the top
+                    # First, check if the space at the top is blocked
+                    if self.grid[grid_x][0] == self.colors_inverted:
+                        # If top is blocked, stop at bottom
+                        block.y = GRID_SIZE - 1
+                        block.falling = False
+                        block.y_velocity = 0
+                        self.sound_effects.play_block_fall()
+                        blocks_moved = True
+                        continue
+                    
+                    # Check for other blocks at the top
+                    blocked_at_top = False
+                    for other_block in self.falling_blocks:
+                        if block != other_block and int(other_block.x) == grid_x and int(other_block.y) == 0:
+                            blocked_at_top = True
+                            break
+                    
+                    if blocked_at_top:
+                        # If blocked by another block at top, stop at bottom
+                        block.y = GRID_SIZE - 1
+                        block.falling = False
+                        block.y_velocity = 0
+                        self.sound_effects.play_block_fall()
+                        blocks_moved = True
+                        continue
+                    
+                    # If not blocked, wrap to top
+                    block.y = 0
                     block.y_velocity = 0
-                    block.fall_delay = random.randint(0, 30)
-                    self.sound_effects.play_block_fall()
                     blocks_moved = True
                     continue
 
