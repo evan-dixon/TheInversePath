@@ -217,6 +217,11 @@ class Game:
         self.movement_delay = 0
         self.movement_cooldown = 10
         
+        # Block count scaling
+        self.BASE_BLOCKS = 7  # Starting number of blocks for level 1
+        self.MAX_BLOCKS = 40   # Maximum number of blocks at higher levels
+        self.BLOCKS_PER_LEVEL = 1  # How many blocks to add per level
+        
         # Transition effect variables
         self.transition_alpha = 0
         self.transition_speed = 8
@@ -428,6 +433,11 @@ class Game:
             # Update timer
             self.spawn_animation_timer -= 1
 
+    def get_block_count_for_level(self):
+        """Calculate the number of blocks for the current level"""
+        block_count = self.BASE_BLOCKS + (self.level - 1) * self.BLOCKS_PER_LEVEL
+        return min(block_count, self.MAX_BLOCKS)
+
     def create_falling_blocks(self):
         """Create initial falling blocks, ensuring they don't trap the player"""
         max_attempts = 10
@@ -435,8 +445,11 @@ class Game:
             self.falling_blocks = []
             blocks_valid = True
             
+            # Get block count for current level
+            block_count = self.get_block_count_for_level()
+            
             # Try to place blocks
-            for _ in range(INITIAL_BLOCKS):
+            for _ in range(block_count):
                 x = random.randint(0, GRID_SIZE-1)
                 # Initially distribute blocks randomly throughout the map
                 y = random.uniform(0, GRID_SIZE-1)
@@ -459,7 +472,7 @@ class Game:
         
         # If we couldn't find a valid configuration, place fewer blocks
         self.falling_blocks = []
-        reduced_blocks = INITIAL_BLOCKS // 2
+        reduced_blocks = block_count // 2
         for _ in range(reduced_blocks):
             x = random.randint(0, GRID_SIZE-1)
             # Place blocks higher up to give more time for player to move
