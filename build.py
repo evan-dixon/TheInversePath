@@ -7,11 +7,13 @@ def compile_loading_window():
     """Compile the loading window for macOS"""
     if platform.system().lower() == 'darwin':
         try:
-            # Compile the loading window
+            # Compile the loading window as a universal binary
             subprocess.run([
                 'clang',
                 'loading_window.m',
                 '-framework', 'Cocoa',
+                '-arch', 'x86_64',  # Intel support
+                '-arch', 'arm64',   # Apple Silicon support
                 '-o', 'loading_window'
             ], check=True)
             return True
