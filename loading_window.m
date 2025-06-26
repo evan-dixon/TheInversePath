@@ -3,6 +3,7 @@
 @interface LoadingWindowController : NSWindowController
 @property (strong) NSProgressIndicator *progressIndicator;
 @property (strong) NSTextField *loadingLabel;
+@property (strong) NSTimer *checkTimer;
 @end
 
 @implementation LoadingWindowController
@@ -41,8 +42,26 @@
         [_loadingLabel setEditable:NO];
         [_loadingLabel setSelectable:NO];
         [[window contentView] addSubview:_loadingLabel];
+        
+        // Start the timer to check for the ready file
+        _checkTimer = [NSTimer scheduledTimerWithTimeInterval:0.1
+                                                     target:self
+                                                   selector:@selector(checkReadyFile)
+                                                   userInfo:nil
+                                                    repeats:YES];
     }
     return self;
+}
+
+- (void)checkReadyFile {
+    NSString *readyPath = [NSString stringWithFormat:@"%@/Contents/MacOS/.ready", 
+                          [[NSBundle mainBundle] bundlePath]];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:readyPath]) {
+        // Clean up the ready file
+        [[NSFileManager defaultManager] removeItemAtPath:readyPath error:nil];
+        // Quit the app
+        [NSApp terminate:nil];
+    }
 }
 
 @end

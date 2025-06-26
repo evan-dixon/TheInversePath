@@ -38,6 +38,25 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+def signal_loading_complete():
+    """Signal that the game has finished loading"""
+    if platform.system() == 'Darwin':
+        # Get the .app bundle MacOS directory
+        if getattr(sys, 'frozen', False):
+            # Running as bundled app
+            bundle_dir = os.path.dirname(sys.executable)
+            ready_path = os.path.join(bundle_dir, '.ready')
+        else:
+            # Running in development
+            ready_path = '.ready'
+        
+        # Create the ready file
+        try:
+            with open(ready_path, 'w') as f:
+                f.write('ready')
+        except Exception as e:
+            print(f"Failed to create ready file: {e}")
+
 @atexit.register
 def cleanup_pygame():
     """Clean up Pygame resources at exit"""
@@ -245,6 +264,9 @@ class Game:
         self.start_background_music()
         
         self.reset_game()
+        
+        # Signal that loading is complete
+        signal_loading_complete()
 
     def start_background_music(self):
         """Start playing music in a background thread"""

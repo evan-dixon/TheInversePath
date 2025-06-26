@@ -66,9 +66,7 @@ def build_executable():
             wrapper_script = '''#!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 "$DIR/loading_window" & # Start loading window
-LOADING_PID=$!
 "$DIR/TheInversePath.bin" # Start main app
-kill $LOADING_PID # Close loading window when main app starts
 '''
             # Save the wrapper script
             with open('dist/wrapper.sh', 'w') as f:
