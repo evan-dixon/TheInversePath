@@ -1132,14 +1132,17 @@ class Game:
     def reset_game_state(self):
         """Reset the entire game state to start over"""
         self.level = 1
+        self.next_level = 1  # Reset next_level to match current level
         self.colors_inverted = False
         self.game_over = False
         self.game_over_alpha = 0
         self.death_animation_timer = 0
         self.death_particles = []
         self.is_transitioning = False
-        self.is_level_transitioning = False
-        self.level_transition_state = 'none'
+        self.is_level_transitioning = True  # Start with level transition
+        self.level_transition_state = 'fadeout'  # Start with fadeout to show level 1
+        self.level_transition_alpha = 0
+        self.transition_hold_timer = self.transition_hold_duration
         self.reset_game()
 
     def draw_menu_text(self, text, font, color, y_pos, selected=False, disabled=False, center_x=None):
