@@ -9,14 +9,14 @@ This was created for the Weekly Jam #2 on Itch.io
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8 or higher (designed on 3.13)
 - pip (Python package installer)
 
 ### Installation Steps
 
 1. Clone this repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/evan-dixon/TheInversePath.git
 cd TheInversePath
 ```
 

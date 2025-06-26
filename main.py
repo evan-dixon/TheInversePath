@@ -286,6 +286,25 @@ class Game:
         self.music_thread = Thread(target=music_loop, daemon=True)
         self.music_thread.start()
 
+    def find_safe_position(self):
+        """Find a safe position for the player that won't result in immediate death"""
+        # Try all positions on the grid
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+                if self.grid[x][y] != self.colors_inverted and self.is_position_safe_from_blocks(x, y):
+                    # Check if this position has at least one valid move
+                    has_valid_move = False
+                    for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                        new_x = x + dx
+                        new_y = y + dy
+                        if self.will_position_be_valid(new_x, new_y, self.endpoint):
+                            has_valid_move = True
+                            break
+                    
+                    if has_valid_move:
+                        return [x, y]
+        return None
+
     def reset_game(self):
         attempts = 0
         max_attempts = 10
@@ -308,7 +327,13 @@ class Game:
                 # Final verification that the position is playable
                 if not self.check_player_trapped():
                     valid_layout = True
-                
+                else:
+                    # If player is trapped immediately, try to find a new safe position
+                    new_pos = self.find_safe_position()
+                    if new_pos is not None:
+                        self.player_pos = new_pos
+                        valid_layout = True
+            
             attempts += 1
         
         if not valid_layout:
@@ -729,7 +754,8 @@ class Game:
             old_pos = self.player_pos.copy()
             self.player_pos = [new_x, new_y]
             self.sound_effects.play_move()
-            
+            # Mark that a move has been made
+            self._moves_made = True
             return True
         return False
 
@@ -922,6 +948,10 @@ class Game:
             
         # First check if a block will fall on the player
         if self.will_block_fall_here(self.player_pos[0], self.player_pos[1]):
+            # If no moves have been made yet, don't consider this trapped
+            if not hasattr(self, '_moves_made'):
+                self._moves_made = False
+                return False
             return True
             
         # Check all four directions
