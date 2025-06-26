@@ -1521,47 +1521,96 @@ class Game:
 
     def clean_up(self):
         """Clean up game-specific resources"""
-        # First clean up game state
-        self.clean_up_game_state()
-        
-        # Stop the music thread and wait for it to finish
-        if self.music_thread and self.music_thread.is_alive():
-            # Signal the music generator to stop all sounds and threads
-            if hasattr(self.music_gen, 'stop_all_sounds'):
-                self.music_gen.stop_all_sounds()
+        try:
+            # First clean up game state
+            self.clean_up_game_state()
             
-            # Set the stop event
-            self.music_stop_event.set()
+            # Stop the music thread and wait for it to finish
+            if self.music_thread and self.music_thread.is_alive():
+                # Signal the music generator to stop all sounds and threads
+                if hasattr(self.music_gen, 'stop_all_sounds'):
+                    try:
+                        self.music_gen.stop_all_sounds()
+                    except:
+                        pass
+                
+                # Set the stop event
+                try:
+                    self.music_stop_event.set()
+                except:
+                    pass
+                
+                # Give the thread a moment to clean up
+                try:
+                    self.music_thread.join(timeout=0.5)
+                except:
+                    pass
+
+            # Clean up sound systems
+            if self.sound_effects:
+                try:
+                    self.sound_effects.stop_all_sounds()
+                except:
+                    pass
             
-            # Give the thread a moment to clean up
+            # Clean up Pygame resources
             try:
-                self.music_thread.join(timeout=0.5)
+                # Stop any ongoing sounds
+                pygame.mixer.stop()
+            except:
+                pass
+            
+            try:
+                # Quit the mixer
+                pygame.mixer.quit()
+            except:
+                pass
+            
+            try:
+                # Quit the display
+                pygame.display.quit()
+            except:
+                pass
+            
+            try:
+                # Finally quit pygame
+                pygame.quit()
             except:
                 pass
 
-        # Clean up objects (this will trigger their __del__ methods if defined)
-        self.sound_effects = None
-        self.music_gen = None
-        self.music_thread = None
-        self.music_stop_event = None
+            # Clean up objects (this will trigger their __del__ methods if defined)
+            self.sound_effects = None
+            self.music_gen = None
+            self.music_thread = None
+            self.music_stop_event = None
+            
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
 
     def clean_up_game_state(self):
         """Clean up game-specific resources when transitioning to menu"""
-        # Stop any ongoing sounds
-        if self.sound_effects:
-            self.sound_effects.stop_all_sounds()
-        
-        # Reset game variables
-        self.game_over = False
-        self.is_transitioning = False
-        self.is_level_transitioning = False
-        self.showing_contrast_preview = False
-        self.movement_locked = False
-        
-        # Clear any ongoing animations
-        self.death_animation_timer = 0
-        self.death_particles = []
-        self.spawn_rings = []
+        try:
+            # Stop any ongoing sounds
+            if self.sound_effects:
+                try:
+                    self.sound_effects.stop_all_sounds()
+                except:
+                    pass
+            
+            # Reset game variables
+            self.game_over = False
+            self.is_transitioning = False
+            self.is_level_transitioning = False
+            self.showing_contrast_preview = False
+            self.movement_locked = False
+            
+            # Clear any ongoing animations
+            self.death_animation_timer = 0
+            self.death_particles = []
+            self.spawn_rings = []
+            
+        except Exception as e:
+            print(f"Error during game state cleanup: {e}")
 
     def run(self):
         """Main game loop"""
@@ -1763,7 +1812,18 @@ class Game:
         except Exception as e:
             print(f"Error during game execution: {e}")
         finally:
-            self.clean_up()
+            try:
+                self.clean_up()
+            except:
+                pass  # Ensure no exceptions during cleanup prevent exit
+            try:
+                pygame.quit()
+            except:
+                pass
+            try:
+                sys.exit(0)
+            except:
+                pass
 
 if __name__ == "__main__":
     game = Game()
