@@ -5,6 +5,13 @@ import math
 import numpy as np
 from threading import Thread, Event, Lock
 
+def _is_mixer_available():
+    """Check if the mixer is available and initialized"""
+    try:
+        return pygame.mixer.get_init() is not None
+    except:
+        return False
+
 class MusicGenerator:
     def __init__(self):
         pygame.mixer.init(frequency=44100, channels=2)
@@ -492,41 +499,47 @@ class MusicGenerator:
         return sound
 
     def generate_harmony_tone(self, frequency, duration, amplitude=4096):
-        """Generate a tone with a warmer, pad-like timbre"""
-        # Check cache first
-        cache_key = f"harmony_{frequency}_{duration}_{amplitude}"
-        if cache_key in self.tone_cache:
-            return self.tone_cache[cache_key]
+        """Generate a harmony tone with the given frequency and duration"""
+        if not _is_mixer_available():
+            return None
             
-        # Generate if not in cache
-        harmonics = {
-            1.0: 1.0,    # Fundamental
-            2.0: 0.3,    # Octave
-            3.0: 0.05,   # Perfect fifth + octave
-            4.0: 0.02    # Second octave
-        }
-        
-        wave = self.generate_harmonic_content(frequency, duration, harmonics)
-        wave = self.apply_envelope(wave, attack=0.25, decay=0.4, sustain=0.4, release=0.5)
-        
-        # Add very subtle chorus effect
-        chorus_wave = self.generate_harmonic_content(frequency * 1.002, duration, harmonics)
-        chorus_wave = self.apply_envelope(chorus_wave, attack=0.25, decay=0.4, sustain=0.4, release=0.5)
-        wave = 0.8 * wave + 0.2 * chorus_wave
-        
-        # Reduce overall amplitude for harmony
-        amplitude = amplitude * 0.5
-        wave = wave * (amplitude / np.max(np.abs(wave)))
-        
-        samples = wave.astype(np.int16)
-        stereo = np.column_stack((samples, samples))
-        sound = pygame.sndarray.make_sound(stereo)
-        
-        # Cache the result
-        if len(self.tone_cache) < self.max_cache_size:
-            self.tone_cache[cache_key] = sound
+        try:
+            # Check cache first
+            cache_key = f"harmony_{frequency}_{duration}_{amplitude}"
+            if cache_key in self.tone_cache:
+                return self.tone_cache[cache_key]
             
-        return sound
+            # Generate if not in cache
+            harmonics = {
+                1.0: 1.0,    # Fundamental
+                2.0: 0.3,    # Octave
+                3.0: 0.05,   # Perfect fifth + octave
+                4.0: 0.02    # Second octave
+            }
+            
+            wave = self.generate_harmonic_content(frequency, duration, harmonics)
+            wave = self.apply_envelope(wave, attack=0.25, decay=0.4, sustain=0.4, release=0.5)
+            
+            # Add very subtle chorus effect
+            chorus_wave = self.generate_harmonic_content(frequency * 1.002, duration, harmonics)
+            chorus_wave = self.apply_envelope(chorus_wave, attack=0.25, decay=0.4, sustain=0.4, release=0.5)
+            wave = 0.8 * wave + 0.2 * chorus_wave
+            
+            # Reduce overall amplitude for harmony
+            amplitude = amplitude * 0.5
+            wave = wave * (amplitude / np.max(np.abs(wave)))
+            
+            samples = wave.astype(np.int16)
+            stereo = np.column_stack((samples, samples))
+            sound = pygame.sndarray.make_sound(stereo)
+            
+            # Cache the result
+            if len(self.tone_cache) < self.max_cache_size:
+                self.tone_cache[cache_key] = sound
+            
+            return sound
+        except:
+            return None
 
     def generate_drum_sound(self, type='kick', volume_scale=1.0):
         """Generate different types of drum sounds with more realistic timbres and volume control"""
@@ -852,13 +865,16 @@ class MusicGenerator:
         return song_parts
 
     def play_sound(self, sound):
-        """Helper function to play and track sounds with correct volume"""
-        if sound is not None:
-            channel = pygame.mixer.find_channel(True)
-            if channel:
-                channel.set_volume(0.0 if self.is_muted else self.volume)
-                channel.play(sound)
-                return sound
+        """Play a sound if the mixer is available"""
+        if sound and _is_mixer_available():
+            try:
+                channel = pygame.mixer.find_channel(True)
+                if channel:
+                    channel.set_volume(0.0 if self.is_muted else self.volume)
+                    channel.play(sound)
+                    return sound
+            except:
+                pass
         return None
 
     def play_song(self):
@@ -925,16 +941,22 @@ class MusicGenerator:
             
             def cleanup_finished_sounds():
                 """Remove finished sounds from active_sounds list"""
+                if not _is_mixer_available():
+                    return
+            
                 for sound in active_sounds[:]:
-                    if not pygame.mixer.find_channel(True):
-                        try:
+                    try:
+                        if not pygame.mixer.find_channel(True):
                             sound.stop()
-                        except:
-                            pass
-                        if sound in active_sounds:
-                            active_sounds.remove(sound)
-                        if sound in current_section_sounds:
-                            current_section_sounds.remove(sound)
+                            if sound in active_sounds:
+                                active_sounds.remove(sound)
+                            if sound in current_section_sounds:
+                                current_section_sounds.remove(sound)
+                    except:
+                        # If we can't access the mixer, just clear the lists
+                        active_sounds.clear()
+                        current_section_sounds.clear()
+                        break
 
             def stop_all_section_sounds():
                 """Stop all sounds from the current section"""
@@ -1055,7 +1077,10 @@ class MusicGenerator:
                         
                         # Change pattern every 4 bars
                         if step % 64 == 0:
-                            current_pattern = random.choice(self.harmony_patterns[self.current_genre])
+                            try:
+                                current_pattern = random.choice(self.harmony_patterns[self.current_genre])
+                            except:
+                                continue
                         
                         # Get current step in pattern
                         pattern_step = step % 16
@@ -1064,30 +1089,35 @@ class MusicGenerator:
                             time.sleep(0.001)
                             continue
                         
-                        if pattern_step == 0 or current_pattern[pattern_step]:
-                            progression = part['progression']
-                            chord_index = (step // 8) % len(progression)
-                            chord_degree = progression[chord_index]
-                            root_note = self.scales['major'][chord_degree - 1]
-                            
-                            # Choose chord voicing, avoiding the same voicing twice in a row
-                            while True:
-                                chord_notes = self.get_chord_notes(root_note)
-                                if chord_notes != last_voicing:
-                                    break
-                            last_voicing = chord_notes
-                            
-                            # Play chord notes with genre-appropriate timing
-                            for freq in chord_notes:
-                                # Shorter duration for funk/electronic, longer for ambient
-                                if self.current_genre in ['funk', 'electronic']:
-                                    duration = self.beat_duration
-                                else:
-                                    duration = self.beat_duration * 2
-                                tone = self.generate_harmony_tone(freq, duration, amplitude=1536)
-                                play_sound(tone)
-                            
-                            last_chord_step = step // 8
+                        try:
+                            if pattern_step == 0 or current_pattern[pattern_step]:
+                                progression = part['progression']
+                                chord_index = (step // 8) % len(progression)
+                                chord_degree = progression[chord_index]
+                                root_note = self.scales['major'][chord_degree - 1]
+                                
+                                # Choose chord voicing, avoiding the same voicing twice in a row
+                                while True:
+                                    chord_notes = self.get_chord_notes(root_note)
+                                    if chord_notes != last_voicing:
+                                        break
+                                last_voicing = chord_notes
+                                
+                                # Play chord notes with genre-appropriate timing
+                                for freq in chord_notes:
+                                    # Shorter duration for funk/electronic, longer for ambient
+                                    if self.current_genre in ['funk', 'electronic']:
+                                        duration = self.beat_duration
+                                    else:
+                                        duration = self.beat_duration * 2
+                                    tone = self.generate_harmony_tone(freq, duration, amplitude=1536)
+                                    if tone is not None:  # Only play if tone generation succeeded
+                                        play_sound(tone)
+                                
+                                last_chord_step = step // 8
+                        except:
+                            # Handle any errors during chord generation/playback
+                            pass
                     time.sleep(0.001)
 
             def play_drum_part():
@@ -1111,9 +1141,14 @@ class MusicGenerator:
                         last_step = step
                         step_in_bar = step % steps_per_bar
                         
-                        for drum_type, pattern in part['drums'].items():
-                            if pattern[step_in_bar]:
-                                play_sound(self.drum_sounds[drum_type])
+                        try:
+                            for drum_type, pattern in part['drums'].items():
+                                if pattern[step_in_bar]:
+                                    if drum_type in self.drum_sounds:
+                                        play_sound(self.drum_sounds[drum_type])
+                        except (KeyError, AttributeError):
+                            # Drum sounds might have been cleared during shutdown
+                            pass
                     time.sleep(0.001)
 
             # Create and start threads
@@ -1149,6 +1184,35 @@ class MusicGenerator:
             print(f"Error in music playback: {e}")
             # Ensure cleanup happens even if there's an error
             pygame.mixer.stop()
+
+    def stop_all_sounds(self):
+        """Stop all sounds and cleanup resources"""
+        try:
+            # Set stop event first to prevent new sounds from being generated
+            if hasattr(self, 'stop_event'):
+                self.stop_event.set()
+            
+            # Small delay to let threads notice the stop event
+            time.sleep(0.1)
+            
+            # Stop all channels
+            if _is_mixer_available():
+                pygame.mixer.stop()
+            
+            # Clear any cached sounds
+            if hasattr(self, 'drum_sounds'):
+                self.drum_sounds.clear()  # Use clear() instead of reassigning
+            
+            # Stop all section sounds if the function exists
+            if hasattr(self, 'stop_all_section_sounds'):
+                self.stop_all_section_sounds()
+                
+        except:
+            pass  # Ignore any errors during cleanup
+
+    def __del__(self):
+        """Cleanup when the object is deleted"""
+        self.stop_all_sounds()
 
 if __name__ == "__main__":
     music_gen = MusicGenerator()

@@ -15,6 +15,21 @@ import signal
 # Initialize Pygame
 pygame.init()
 
+# Keep track of whether we're shutting down
+_is_shutting_down = False
+
+def _quit_pygame():
+    """Quit pygame after threads have finished"""
+    global _is_shutting_down
+    _is_shutting_down = True
+    try:
+        pygame.quit()
+    except:
+        pass
+
+# Register the cleanup function
+atexit.register(_quit_pygame)
+
 def signal_handler(sig, frame):
     """Handle system signals gracefully"""
     sys.exit(0)
@@ -1412,9 +1427,22 @@ class Game:
 
     def clean_up(self):
         """Clean up game-specific resources"""
+        # First stop the music thread and wait for it to finish
         if self.music_thread and self.music_thread.is_alive():
+            # Signal the music generator to stop all sounds and threads
+            if hasattr(self.music_gen, 'stop_all_sounds'):
+                self.music_gen.stop_all_sounds()
+            
+            # Set the stop event
             self.music_stop_event.set()
-            self.music_thread.join(timeout=0.1)  # Very short timeout
+            
+            # Give the thread a moment to clean up
+            try:
+                self.music_thread.join(timeout=0.5)
+            except:
+                pass
+
+        # Clean up objects (this will trigger their __del__ methods if defined)
         self.sound_effects = None
         self.music_gen = None
 
@@ -1425,7 +1453,7 @@ class Game:
         transition_complete = False
 
         try:
-            while running:
+            while running and not _is_shutting_down:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         running = False
