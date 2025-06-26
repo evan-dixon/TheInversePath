@@ -104,4 +104,8 @@ class SoundEffects:
     def play_victory(self):
         """Play the victory sound"""
         if not self.is_muted:
-            self.victory_sound.play() 
+            self.victory_sound.play()
+
+    def stop_all_sounds(self):
+        """Stop all currently playing sound effects"""
+        pygame.mixer.stop()  # Stop all playing channels 

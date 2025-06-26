@@ -1276,6 +1276,7 @@ class Game:
                 self.menu_state = MENU_OPTIONS
                 self.selected_menu_item = 0
             elif self.selected_menu_item == 3:
+                self.clean_up()
                 pygame.quit()
                 sys.exit()
         
@@ -1287,6 +1288,7 @@ class Game:
                 self.menu_state = MENU_OPTIONS
                 self.selected_menu_item = 0
             elif self.selected_menu_item == 2:
+                self.clean_up_game_state()
                 self.menu_state = MENU_INTRO
                 self.selected_menu_item = 0
                 self.reset_game_state()
@@ -1427,7 +1429,10 @@ class Game:
 
     def clean_up(self):
         """Clean up game-specific resources"""
-        # First stop the music thread and wait for it to finish
+        # First clean up game state
+        self.clean_up_game_state()
+        
+        # Stop the music thread and wait for it to finish
         if self.music_thread and self.music_thread.is_alive():
             # Signal the music generator to stop all sounds and threads
             if hasattr(self.music_gen, 'stop_all_sounds'):
@@ -1445,6 +1450,26 @@ class Game:
         # Clean up objects (this will trigger their __del__ methods if defined)
         self.sound_effects = None
         self.music_gen = None
+        self.music_thread = None
+        self.music_stop_event = None
+
+    def clean_up_game_state(self):
+        """Clean up game-specific resources when transitioning to menu"""
+        # Stop any ongoing sounds
+        if self.sound_effects:
+            self.sound_effects.stop_all_sounds()
+        
+        # Reset game variables
+        self.game_over = False
+        self.is_transitioning = False
+        self.is_level_transitioning = False
+        self.showing_contrast_preview = False
+        self.movement_locked = False
+        
+        # Clear any ongoing animations
+        self.death_animation_timer = 0
+        self.death_particles = []
+        self.spawn_rings = []
 
     def run(self):
         """Main game loop"""
