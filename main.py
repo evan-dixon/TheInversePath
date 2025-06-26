@@ -218,9 +218,9 @@ class Game:
         self.movement_cooldown = 10
         
         # Block count scaling
-        self.BASE_BLOCKS = 7  # Starting number of blocks for level 1
-        self.MAX_BLOCKS = 40   # Maximum number of blocks at higher levels
-        self.BLOCKS_PER_LEVEL = 1  # How many blocks to add per level
+        self.BASE_BLOCKS = 7 
+        self.MAX_BLOCKS = 40  
+        self.BLOCKS_PER_LEVEL = 1 
         
         # Transition effect variables
         self.transition_alpha = 0
@@ -1169,15 +1169,15 @@ class Game:
     def reset_game_state(self):
         """Reset the entire game state to start over"""
         self.level = 1
-        self.next_level = 1  # Reset next_level to match current level
+        self.next_level = 1 
         self.colors_inverted = False
         self.game_over = False
         self.game_over_alpha = 0
         self.death_animation_timer = 0
         self.death_particles = []
         self.is_transitioning = False
-        self.is_level_transitioning = True  # Start with level transition
-        self.level_transition_state = 'fadeout'  # Start with fadeout to show level 1
+        self.is_level_transitioning = True 
+        self.level_transition_state = 'fadeout' 
         self.level_transition_alpha = 0
         self.transition_hold_timer = self.transition_hold_duration
         self.reset_game()
@@ -1815,7 +1815,7 @@ class Game:
             try:
                 self.clean_up()
             except:
-                pass  # Ensure no exceptions during cleanup prevent exit
+                pass 
             try:
                 pygame.quit()
             except:
