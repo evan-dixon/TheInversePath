@@ -653,9 +653,9 @@ class Game:
     def generate_grid(self, make_easier=False):
         """Generate the grid layout, optionally making it easier with more walkable spaces"""
         self.grid = []
-        scale = 5.0 + (self.level * 0.5)
+        scale = 3.0 + (self.level * 0.3)  # Smaller scale for more detail
+        
         if make_easier:
-            # Adjust the noise threshold to create more walkable spaces
             noise_threshold = -0.2
         else:
             noise_threshold = 0.0
@@ -663,16 +663,34 @@ class Game:
         for x in range(GRID_SIZE):
             row = []
             for y in range(GRID_SIZE):
-                value = noise.pnoise2(x/scale, 
-                                    y/scale, 
-                                    octaves=1, 
-                                    persistence=0.5,
-                                    lacunarity=2.0,
+                # Add some random offset to coordinates for more chaos
+                x_offset = x + random.uniform(-0.5, 0.5)
+                y_offset = y + random.uniform(-0.5, 0.5)
+                
+                value = noise.pnoise2(x_offset/scale, 
+                                    y_offset/scale, 
+                                    octaves=4,  # More octaves for more detail
+                                    persistence=0.7,  # Higher persistence to make details more prominent
+                                    lacunarity=3.0,  # Higher lacunarity for more variation between octaves
                                     repeatx=GRID_SIZE,
                                     repeaty=GRID_SIZE,
                                     base=random.randint(0, 1000))
+                
+                # Add a second layer of noise at a different scale
+                value2 = noise.pnoise2((x_offset + 100)/scale * 2, 
+                                     (y_offset + 100)/scale * 2,
+                                     octaves=2,
+                                     persistence=0.8,
+                                     lacunarity=2.5,
+                                     repeatx=GRID_SIZE,
+                                     repeaty=GRID_SIZE,
+                                     base=random.randint(0, 1000))
+                
+                # Combine the noise values with some randomness
+                combined_value = value * 0.6 + value2 * 0.4 + random.uniform(-0.1, 0.1)
+                
                 # Convert to binary (True for white, False for black)
-                row.append(value > noise_threshold)
+                row.append(combined_value > noise_threshold)
             self.grid.append(row)
 
     def manhattan_distance(self, pos1, pos2):
