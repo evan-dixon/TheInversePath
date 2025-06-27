@@ -716,10 +716,13 @@ class Game:
         """Find all valid positions that are at least min_distance apart"""
         valid_positions = []
         
+        # Define the safe spawn area (exclude top 5 rows)
+        SPAWN_EXCLUSION_ROWS = 5
+        
         # First, collect all valid positions (walkable spaces)
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
-                # Position must be walkable and safe from initial block falls
+                # Skip positions in the top 5 rows for player spawn
                 if self.grid[x][y] != self.colors_inverted and self.is_position_safe_from_blocks(x, y):
                     valid_positions.append((x, y))
         
@@ -731,6 +734,10 @@ class Game:
         
         # Try each position as a potential player start
         for start_pos in valid_positions:
+            # Skip positions in the top 5 rows for player spawn
+            if start_pos[1] < SPAWN_EXCLUSION_ROWS:
+                continue
+                
             # For each potential start position, verify it has at least one valid move
             has_valid_move = False
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
@@ -1522,70 +1529,42 @@ class Game:
     def clean_up(self):
         """Clean up game-specific resources"""
         try:
-            # First clean up game state
-            self.clean_up_game_state()
+            # First stop all game processes
+            self._is_shutting_down = True
             
-            # Stop the music thread and wait for it to finish
+            # Stop the music thread first
             if self.music_thread and self.music_thread.is_alive():
-                # Signal the music generator to stop all sounds and threads
-                if hasattr(self.music_gen, 'stop_all_sounds'):
-                    try:
-                        self.music_gen.stop_all_sounds()
-                    except:
-                        pass
-                
-                # Set the stop event
                 try:
                     self.music_stop_event.set()
-                except:
-                    pass
-                
-                # Give the thread a moment to clean up
-                try:
                     self.music_thread.join(timeout=0.5)
                 except:
                     pass
 
-            # Clean up sound systems
+            # Clear all game objects that might try to use Pygame
+            self.falling_blocks = []
+            self.death_particles = []
+            self.spawn_rings = []
+            
+            # Stop all sounds before cleaning up pygame
             if self.sound_effects:
                 try:
                     self.sound_effects.stop_all_sounds()
                 except:
                     pass
-            
-            # Clean up Pygame resources
-            try:
-                # Stop any ongoing sounds
-                pygame.mixer.stop()
-            except:
-                pass
-            
-            try:
-                # Quit the mixer
-                pygame.mixer.quit()
-            except:
-                pass
-            
-            try:
-                # Quit the display
-                pygame.display.quit()
-            except:
-                pass
-            
-            try:
-                # Finally quit pygame
-                pygame.quit()
-            except:
-                pass
-
-            # Clean up objects (this will trigger their __del__ methods if defined)
+            if self.music_gen:
+                try:
+                    self.music_gen.stop_all_sounds()
+                except:
+                    pass
+                    
+            # Clear sound objects
             self.sound_effects = None
             self.music_gen = None
             self.music_thread = None
             self.music_stop_event = None
             
         except Exception as e:
-            print(f"Error during cleanup: {e}")
+            print(f"Error during game cleanup: {e}")
 
     def clean_up_game_state(self):
         """Clean up game-specific resources when transitioning to menu"""
@@ -1617,9 +1596,10 @@ class Game:
         running = True
         blocks_settling = False
         transition_complete = False
+        self._is_shutting_down = False
 
         try:
-            while running and not _is_shutting_down:
+            while running and not self._is_shutting_down:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         running = False
@@ -1812,16 +1792,27 @@ class Game:
         except Exception as e:
             print(f"Error during game execution: {e}")
         finally:
+            # First clean up our game resources
             try:
                 self.clean_up()
             except:
-                pass 
+                pass
+
+            # Then clean up Pygame in a specific order
             try:
-                pygame.quit()
+                pygame.mixer.stop()
             except:
                 pass
             try:
-                sys.exit(0)
+                pygame.mixer.quit()
+            except:
+                pass
+            try:
+                pygame.display.quit()
+            except:
+                pass
+            try:
+                pygame.quit()
             except:
                 pass
 
@@ -1829,5 +1820,11 @@ if __name__ == "__main__":
     game = Game()
     try:
         game.run()
+    except Exception as e:
+        print(f"Error in main: {e}")
     finally:
+        try:
+            pygame.quit()
+        except:
+            pass
         sys.exit(0) 
