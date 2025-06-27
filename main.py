@@ -187,7 +187,7 @@ class Game:
         self.waiting_for_key = None
         
         # Volume settings (initialize before sound systems)
-        self.sfx_volume = 1.0
+        self.sfx_volume = 0.5
         self.music_volume = 0.5
         self.sfx_muted = False
         self.music_muted = False
@@ -216,6 +216,11 @@ class Game:
         self.falling_blocks = []
         self.movement_delay = 0
         self.movement_cooldown = 10
+        
+        # Block count scaling
+        self.BASE_BLOCKS = 7 
+        self.MAX_BLOCKS = 40  
+        self.BLOCKS_PER_LEVEL = 1 
         
         # Transition effect variables
         self.transition_alpha = 0
@@ -286,6 +291,25 @@ class Game:
         self.music_thread = Thread(target=music_loop, daemon=True)
         self.music_thread.start()
 
+    def find_safe_position(self):
+        """Find a safe position for the player that won't result in immediate death"""
+        # Try all positions on the grid
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+                if self.grid[x][y] != self.colors_inverted and self.is_position_safe_from_blocks(x, y):
+                    # Check if this position has at least one valid move
+                    has_valid_move = False
+                    for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                        new_x = x + dx
+                        new_y = y + dy
+                        if self.will_position_be_valid(new_x, new_y, self.endpoint):
+                            has_valid_move = True
+                            break
+                    
+                    if has_valid_move:
+                        return [x, y]
+        return None
+
     def reset_game(self):
         attempts = 0
         max_attempts = 10
@@ -308,7 +332,13 @@ class Game:
                 # Final verification that the position is playable
                 if not self.check_player_trapped():
                     valid_layout = True
-                
+                else:
+                    # If player is trapped immediately, try to find a new safe position
+                    new_pos = self.find_safe_position()
+                    if new_pos is not None:
+                        self.player_pos = new_pos
+                        valid_layout = True
+            
             attempts += 1
         
         if not valid_layout:
@@ -403,6 +433,11 @@ class Game:
             # Update timer
             self.spawn_animation_timer -= 1
 
+    def get_block_count_for_level(self):
+        """Calculate the number of blocks for the current level"""
+        block_count = self.BASE_BLOCKS + (self.level - 1) * self.BLOCKS_PER_LEVEL
+        return min(block_count, self.MAX_BLOCKS)
+
     def create_falling_blocks(self):
         """Create initial falling blocks, ensuring they don't trap the player"""
         max_attempts = 10
@@ -410,8 +445,11 @@ class Game:
             self.falling_blocks = []
             blocks_valid = True
             
+            # Get block count for current level
+            block_count = self.get_block_count_for_level()
+            
             # Try to place blocks
-            for _ in range(INITIAL_BLOCKS):
+            for _ in range(block_count):
                 x = random.randint(0, GRID_SIZE-1)
                 # Initially distribute blocks randomly throughout the map
                 y = random.uniform(0, GRID_SIZE-1)
@@ -434,7 +472,7 @@ class Game:
         
         # If we couldn't find a valid configuration, place fewer blocks
         self.falling_blocks = []
-        reduced_blocks = INITIAL_BLOCKS // 2
+        reduced_blocks = block_count // 2
         for _ in range(reduced_blocks):
             x = random.randint(0, GRID_SIZE-1)
             # Place blocks higher up to give more time for player to move
@@ -518,12 +556,36 @@ class Game:
                 
                 # Check if block would hit bottom of screen
                 if grid_y >= GRID_SIZE - 1:
-                    # Reset block to top with random x position
-                    block.x = random.randint(0, GRID_SIZE-1)
-                    block.y = random.uniform(0, 3)
+                    # Check if the block can fall through to the top
+                    # First, check if the space at the top is blocked
+                    if self.grid[grid_x][0] == self.colors_inverted:
+                        # If top is blocked, stop at bottom
+                        block.y = GRID_SIZE - 1
+                        block.falling = False
+                        block.y_velocity = 0
+                        self.sound_effects.play_block_fall()
+                        blocks_moved = True
+                        continue
+                    
+                    # Check for other blocks at the top
+                    blocked_at_top = False
+                    for other_block in self.falling_blocks:
+                        if block != other_block and int(other_block.x) == grid_x and int(other_block.y) == 0:
+                            blocked_at_top = True
+                            break
+                    
+                    if blocked_at_top:
+                        # If blocked by another block at top, stop at bottom
+                        block.y = GRID_SIZE - 1
+                        block.falling = False
+                        block.y_velocity = 0
+                        self.sound_effects.play_block_fall()
+                        blocks_moved = True
+                        continue
+                    
+                    # If not blocked, wrap to top
+                    block.y = 0
                     block.y_velocity = 0
-                    block.fall_delay = random.randint(0, 30)
-                    self.sound_effects.play_block_fall()
                     blocks_moved = True
                     continue
 
@@ -654,10 +716,13 @@ class Game:
         """Find all valid positions that are at least min_distance apart"""
         valid_positions = []
         
+        # Define the safe spawn area (exclude top 5 rows)
+        SPAWN_EXCLUSION_ROWS = 5
+        
         # First, collect all valid positions (walkable spaces)
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
-                # Position must be walkable and safe from initial block falls
+                # Skip positions in the top 5 rows for player spawn
                 if self.grid[x][y] != self.colors_inverted and self.is_position_safe_from_blocks(x, y):
                     valid_positions.append((x, y))
         
@@ -669,6 +734,10 @@ class Game:
         
         # Try each position as a potential player start
         for start_pos in valid_positions:
+            # Skip positions in the top 5 rows for player spawn
+            if start_pos[1] < SPAWN_EXCLUSION_ROWS:
+                continue
+                
             # For each potential start position, verify it has at least one valid move
             has_valid_move = False
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
@@ -729,7 +798,8 @@ class Game:
             old_pos = self.player_pos.copy()
             self.player_pos = [new_x, new_y]
             self.sound_effects.play_move()
-            
+            # Mark that a move has been made
+            self._moves_made = True
             return True
         return False
 
@@ -922,6 +992,10 @@ class Game:
             
         # First check if a block will fall on the player
         if self.will_block_fall_here(self.player_pos[0], self.player_pos[1]):
+            # If no moves have been made yet, don't consider this trapped
+            if not hasattr(self, '_moves_made'):
+                self._moves_made = False
+                return False
             return True
             
         # Check all four directions
@@ -1102,14 +1176,17 @@ class Game:
     def reset_game_state(self):
         """Reset the entire game state to start over"""
         self.level = 1
+        self.next_level = 1 
         self.colors_inverted = False
         self.game_over = False
         self.game_over_alpha = 0
         self.death_animation_timer = 0
         self.death_particles = []
         self.is_transitioning = False
-        self.is_level_transitioning = False
-        self.level_transition_state = 'none'
+        self.is_level_transitioning = True 
+        self.level_transition_state = 'fadeout' 
+        self.level_transition_alpha = 0
+        self.transition_hold_timer = self.transition_hold_duration
         self.reset_game()
 
     def draw_menu_text(self, text, font, color, y_pos, selected=False, disabled=False, center_x=None):
@@ -1451,56 +1528,78 @@ class Game:
 
     def clean_up(self):
         """Clean up game-specific resources"""
-        # First clean up game state
-        self.clean_up_game_state()
-        
-        # Stop the music thread and wait for it to finish
-        if self.music_thread and self.music_thread.is_alive():
-            # Signal the music generator to stop all sounds and threads
-            if hasattr(self.music_gen, 'stop_all_sounds'):
-                self.music_gen.stop_all_sounds()
+        try:
+            # First stop all game processes
+            self._is_shutting_down = True
             
-            # Set the stop event
-            self.music_stop_event.set()
-            
-            # Give the thread a moment to clean up
-            try:
-                self.music_thread.join(timeout=0.5)
-            except:
-                pass
+            # Stop the music thread first
+            if self.music_thread and self.music_thread.is_alive():
+                try:
+                    self.music_stop_event.set()
+                    self.music_thread.join(timeout=0.5)
+                except:
+                    pass
 
-        # Clean up objects (this will trigger their __del__ methods if defined)
-        self.sound_effects = None
-        self.music_gen = None
-        self.music_thread = None
-        self.music_stop_event = None
+            # Clear all game objects that might try to use Pygame
+            self.falling_blocks = []
+            self.death_particles = []
+            self.spawn_rings = []
+            
+            # Stop all sounds before cleaning up pygame
+            if self.sound_effects:
+                try:
+                    self.sound_effects.stop_all_sounds()
+                except:
+                    pass
+            if self.music_gen:
+                try:
+                    self.music_gen.stop_all_sounds()
+                except:
+                    pass
+                    
+            # Clear sound objects
+            self.sound_effects = None
+            self.music_gen = None
+            self.music_thread = None
+            self.music_stop_event = None
+            
+        except Exception as e:
+            print(f"Error during game cleanup: {e}")
 
     def clean_up_game_state(self):
         """Clean up game-specific resources when transitioning to menu"""
-        # Stop any ongoing sounds
-        if self.sound_effects:
-            self.sound_effects.stop_all_sounds()
-        
-        # Reset game variables
-        self.game_over = False
-        self.is_transitioning = False
-        self.is_level_transitioning = False
-        self.showing_contrast_preview = False
-        self.movement_locked = False
-        
-        # Clear any ongoing animations
-        self.death_animation_timer = 0
-        self.death_particles = []
-        self.spawn_rings = []
+        try:
+            # Stop any ongoing sounds
+            if self.sound_effects:
+                try:
+                    self.sound_effects.stop_all_sounds()
+                except:
+                    pass
+            
+            # Reset game variables
+            self.game_over = False
+            self.is_transitioning = False
+            self.is_level_transitioning = False
+            self.showing_contrast_preview = False
+            self.movement_locked = False
+            
+            # Clear any ongoing animations
+            self.death_animation_timer = 0
+            self.death_particles = []
+            self.spawn_rings = []
+            
+        except Exception as e:
+            print(f"Error during game state cleanup: {e}")
 
     def run(self):
         """Main game loop"""
         running = True
         blocks_settling = False
         transition_complete = False
+        self._is_shutting_down = False
 
         try:
-            while running and not _is_shutting_down:
+            while running and not self._is_shutting_down:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         running = False
@@ -1693,11 +1792,39 @@ class Game:
         except Exception as e:
             print(f"Error during game execution: {e}")
         finally:
-            self.clean_up()
+            # First clean up our game resources
+            try:
+                self.clean_up()
+            except:
+                pass
+
+            # Then clean up Pygame in a specific order
+            try:
+                pygame.mixer.stop()
+            except:
+                pass
+            try:
+                pygame.mixer.quit()
+            except:
+                pass
+            try:
+                pygame.display.quit()
+            except:
+                pass
+            try:
+                pygame.quit()
+            except:
+                pass
 
 if __name__ == "__main__":
     game = Game()
     try:
         game.run()
+    except Exception as e:
+        print(f"Error in main: {e}")
     finally:
+        try:
+            pygame.quit()
+        except:
+            pass
         sys.exit(0) 

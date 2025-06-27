@@ -12,13 +12,13 @@ class SoundEffects:
         self.victory_sound = self._create_victory_sound()
         
         # Set default volumes
-        self.volume = 1.0
+        self.volume = 0.7
         self.is_muted = False
         self.set_volume(self.volume)
 
     def _create_move_sound(self):
         """Creates a pleasing blip sound for movement"""
-        sound = pygame.mixer.Sound(self._generate_sine_wave(frequency=440, duration=0.05))
+        sound = pygame.mixer.Sound(self._generate_sine_wave(frequency=440, duration=0.014))
         return sound
 
     def _create_block_fall_sound(self):
